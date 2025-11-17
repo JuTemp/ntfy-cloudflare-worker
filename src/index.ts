@@ -107,7 +107,6 @@ export class SocketsDurableObject extends DurableObject<Env> {
 						'Cache-Control': 'no-cache',
 					},
 				});
-
 			}
 			case (request.method === 'POST' || request.method === 'PUT') && !command: {
 				const content = await request.text();
@@ -213,6 +212,17 @@ export class SocketsDurableObject extends DurableObject<Env> {
 		const duration_regex = /^(\d+)([smhd])$/;
 		switch (true) {
 			case !since: {
+				return this.ctx.storage.sql
+					.exec(
+						`
+					SELECT "id", "time", "expires", "topic", "message" FROM "messages"
+						WHERE "topic" = "${topic}";
+					`,
+					)
+					.toArray() as Item[];
+			}
+			case since === 'all': {
+				// `since` all
 				return this.ctx.storage.sql
 					.exec(
 						`
