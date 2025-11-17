@@ -83,24 +83,7 @@ export class SocketsDurableObject extends DurableObject<Env> {
 			case request.method === 'GET' && command === 'json': {
 				const items = this.#query(topics[0], params.get('since'));
 
-				const { readable, writable } = new TransformStream();
-				const writer = writable.getWriter();
-				const encoder = new TextEncoder();
-
-				this.ctx.waitUntil(
-					new Promise(async (resolve) => {
-						try {
-							for (const msg of items) {
-								await writer.write(encoder.encode(JSON.stringify(msg) + '\n'));
-							}
-						} finally {
-							await writer.close();
-						}
-						resolve(null);
-					}),
-				);
-
-				return new Response(readable, {
+				return new Response(items.map((item) => JSON.stringify({ ...item, event: 'message' })) + '\n', {
 					headers: {
 						'Content-Type': 'application/x-ndjson; charset=utf-8',
 						'Access-Control-Allow-Origin': '*',
