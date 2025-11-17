@@ -75,7 +75,12 @@ export class SocketsDurableObject extends DurableObject<Env> {
 			}
 			case request.method === 'GET' && command === 'json': {
 				const items = this.#query(topics[0], params.get('since'));
-				return new Response(items.map((item) => JSON.stringify(item)).join('\n') + '\n');
+				return new Response(items.map((item) => JSON.stringify(item)).join('\n') + '\n', {
+					headers: {
+						'access-control-allow-origin': '*',
+						'content-type': 'application/x-ndjson; charset=utf-8',
+					},
+				});
 			}
 			case (request.method === 'POST' || request.method === 'PUT') && !command: {
 				const content = await request.text();
