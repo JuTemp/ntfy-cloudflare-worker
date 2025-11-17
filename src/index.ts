@@ -83,7 +83,7 @@ export class SocketsDurableObject extends DurableObject<Env> {
 			case request.method === 'GET' && command === 'json': {
 				const items = this.#query(topics[0], params.get('since'));
 
-				return new Response(items.map((item) => JSON.stringify({ ...item, event: 'message' })) + '\n', {
+				return new Response(items.map((item) => JSON.stringify({ ...item, event: 'message' })).join('\n') + '\n', {
 					headers: {
 						'Content-Type': 'application/x-ndjson; charset=utf-8',
 						'Access-Control-Allow-Origin': '*',
