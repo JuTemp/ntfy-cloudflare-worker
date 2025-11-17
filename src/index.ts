@@ -38,8 +38,16 @@ Docs: https://docs.ntfy.sh/subscribe/api/
 Only support partial features.
 `;
 
+const topic_regex = /^[A-Za-z0-9\-_]+$/;
+
 export default {
 	async fetch(request, env, ctx): Promise<Response> {
+		const [_, topic_string] = new URL(request.url).pathname.split('/');
+		const topics = topic_string.split(',');
+		if (!topics.length || !topics.every((topic) => topic_regex.test(topic))) {
+			return new Response(tutorial, { status: 400 });
+		}
+
 		const durableObjectId = env.SOCKETS_DURABLE_OBJECT.idFromName('sockets_durable_object');
 		const socketsDurableObject: InstanceType<typeof SocketsDurableObject> = env.SOCKETS_DURABLE_OBJECT.get(durableObjectId);
 
@@ -55,7 +63,6 @@ export default {
 
 export class SocketsDurableObject extends DurableObject<Env> {
 	#sockets = new Map<string, Set<WebSocket>>();
-	#topic_regex = /^[A-Za-z0-9\-_]+$/;
 
 	constructor(ctx: DurableObjectState, env: Env) {
 		super(ctx, env);
@@ -65,7 +72,7 @@ export class SocketsDurableObject extends DurableObject<Env> {
 		const params = new URL(request.url).searchParams;
 		const [_, topic_string, command] = new URL(request.url).pathname.split('/');
 		const topics = topic_string.split(',');
-		if (!topics.length || !topics.every((topic) => this.#topic_regex.test(topic))) {
+		if (!topics.length || !topics.every((topic) => topic_regex.test(topic))) {
 			return new Response(tutorial, { status: 400 });
 		}
 
@@ -75,12 +82,32 @@ export class SocketsDurableObject extends DurableObject<Env> {
 			}
 			case request.method === 'GET' && command === 'json': {
 				const items = this.#query(topics[0], params.get('since'));
-				return new Response(items.map((item) => JSON.stringify(item)).join('\n') + '\n', {
+
+				const { readable, writable } = new TransformStream();
+				const writer = writable.getWriter();
+				const encoder = new TextEncoder();
+
+				this.ctx.waitUntil(
+					new Promise(async (resolve) => {
+						try {
+							for (const msg of items) {
+								await writer.write(encoder.encode(JSON.stringify(msg) + '\n'));
+							}
+						} finally {
+							await writer.close();
+						}
+						resolve(null);
+					}),
+				);
+
+				return new Response(readable, {
 					headers: {
-						'access-control-allow-origin': '*',
-						'content-type': 'application/x-ndjson; charset=utf-8',
+						'Content-Type': 'application/x-ndjson; charset=utf-8',
+						'Access-Control-Allow-Origin': '*',
+						'Cache-Control': 'no-cache',
 					},
 				});
+
 			}
 			case (request.method === 'POST' || request.method === 'PUT') && !command: {
 				const content = await request.text();
